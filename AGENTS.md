@@ -2,24 +2,27 @@
 
 ## О проекте
 
-Проект находится на стадии базового каркаса Laravel. Пока есть стандартная
-главная страница и модель пользователя; прикладные модули ещё не реализованы.
-Не предполагай наличие функций, которых нет в коде.
+Реализован модуль 1, блок А: закрытая панель тренера, авторизация, профиль,
+недельный график, услуги и правила записи. Публичный виджет, бронирования,
+Google Calendar и бот-администратор относятся к следующим блокам.
+ТЗ: docs/specs/module-1-block-a.md; запуск: docs/README-block-a.md.
 
 ## Стек
 
 - PHP 8.3+, Laravel 13, Composer.
-- Blade, JavaScript, Tailwind CSS 4, Vite 8; зависимости интерфейса через npm.
-- PostgreSQL 16 в Docker; SQLite в стандартном `.env.example`.
+- Vue 3, TypeScript 5.9, Inertia 3, Tailwind CSS 4, Vite 8; Node.js 24.
+- Laravel Fortify и серверные сессии; Telegram Login RS256 через firebase/php-jwt.
+- PostgreSQL 16 в Docker и `.env.example`; тестовая БД fitspot_test.
 - Redis 7 и RabbitMQ 3 в Docker; пакет `laravel-queue-rabbitmq`.
 - Nginx, PHP-FPM, Docker Compose, Supervisor для очередей и планировщика.
-- PHPUnit 12 для тестов, Laravel Pint для форматирования PHP.
+- PHPUnit 12, Laravel Pint, vue-tsc и Playwright для проверок.
 
 Версии и зависимости уточняй по `composer.json`, `package.json` и lock-файлам.
 
 ## Структура
 
-- `app/` — модели, контроллеры и код приложения.
+- `app/Modules/Scheduling/` — настройки тренера: Controller → Service → Repository, Form Requests, Policies и события после commit.
+- `app/` — общие модели и авторизация; `app/Actions/Fortify/` — действия Fortify.
 - `routes/web.php` — веб-маршруты; `routes/console.php` — консольные команды.
 - `resources/views/`, `resources/css/`, `resources/js/` — интерфейс.
 - `database/migrations/`, `factories/`, `seeders/` — схема БД и тестовые данные.
@@ -34,7 +37,7 @@
 ```sh
 # Зависимости
 composer install
-npm ci                         # если есть package-lock.json; иначе npm install
+npm ci
 
 # Первый запуск нового локального окружения (если .env ещё нет)
 cp .env.example .env
@@ -46,9 +49,10 @@ php artisan serve
 npm run dev
 
 # Проверки и сборка
-composer test
-php artisan test --filter=ExampleTest
-vendor/bin/pint --dirty
+docker compose exec app composer test  # только отдельная PostgreSQL fitspot_test
+npm run typecheck
+npm run test:browser
+vendor/bin/pint app config database routes tests bootstrap/app.php bootstrap/providers.php
 npm run build
 
 # Диагностика
@@ -88,12 +92,12 @@ Node.js/npm в текущем PHP-образе не установлены: сб
 
 - Docker публикует сайт на `http://localhost:8080`; `artisan serve` обычно на порту 8000.
 - Внутри Docker адреса сервисов: `db`, `redis`, `rabbitmq`; с хоста — опубликованные порты.
-  Настройки `.env.example` пока не адаптированы к Docker.
-- По умолчанию `.env.example` использует SQLite, а также БД для очередей, кеша и сессий.
-  Наличие PostgreSQL и Redis в Compose само по себе не переключает Laravel на них.
-- Supervisor запускает два обработчика `queue:work rabbitmq` и `schedule:work`.
-  Подключение `rabbitmq` в `config/queue.php` пока отсутствует: перед использованием
-  очереди нужно завершить её настройку.
+  Compose переопределяет внутренние адреса сервисов; существующий .env сохраняется.
+- `.env.example`: PostgreSQL, Redis для кеша/сессий, RabbitMQ для очереди.
+- Supervisor запускает два `queue:work rabbitmq --queue=mail,default` и `schedule:work`.
+  Mailpit доступен на http://localhost:8025, письма идут через очередь mail.
+- Тесты защищены от запуска на рабочей БД. Создание fitspot_test описано в docs/README-block-a.md.
+- Telegram без TELEGRAM_CLIENT_ID недоступен; реальную интеграцию проверять на разрешённом домене.
 - `composer setup` устанавливает зависимости, генерирует ключ и выполняет миграции
   с `--force`; используй его только для подходящего нового локального окружения.
 - Laravel Boost установлен как dev-зависимость. MCP `laravel-boost` подключён
