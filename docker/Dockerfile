@@ -23,6 +23,9 @@ RUN docker-php-ext-install pdo_pgsql mbstring exif pcntl bcmath gd sockets zip
 # Установка PECL-расширения Redis
 RUN pecl install redis && docker-php-ext-enable redis
 
+# Решает проблему с правами на разных хостах
+RUN git config --global --add safe.directory /var/www
+
 # Установка Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
