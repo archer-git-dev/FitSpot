@@ -1,4 +1,14 @@
 services:
+  frontend:
+    image: node:24-bookworm-slim
+    profiles: [tools]
+    working_dir: /var/www
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+    environment:
+      npm_config_cache: /tmp/npm-cache
+    volumes:
+      - .:/var/www
+
   app:
     build:
       context: .

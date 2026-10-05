@@ -532,7 +532,7 @@ function photoInput(e: Event) {
                                     (i) => i.day === index + 1,
                                 )"
                                 :key="schedule.intervals.indexOf(item)"
-                                class="grid grid-cols-[1fr_1fr_auto] gap-3 items-end mb-3"
+                                class="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 items-end mb-3"
                             >
                                 <div>
                                     <label

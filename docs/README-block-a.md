@@ -5,25 +5,33 @@
 
 ## Первый запуск на другом компьютере
 
-Требуются Docker Compose, PHP 8.3+ и Composer для установки зависимостей,
-Node.js 24 и npm для сборки. PHP-команды приложения и тесты запускайте в контейнере:
+Требуется Docker Compose. PHP/Composer доступны в контейнере app, а Node.js 24/npm —
+в служебном контейнере frontend. Устанавливать их на компьютер не обязательно.
+PHP-команды приложения и тесты запускайте в контейнере:
 там есть PostgreSQL, Redis и GD с JPEG/WebP.
 
 Из корня проекта:
 
 ```sh
-composer install
-npm ci
 # Только если .env отсутствует:
 cp .env.example .env
-npm run build
 docker compose up -d --build
+docker compose exec app composer install
+docker compose run --rm frontend npm ci
+docker compose run --rm frontend npm run build
 # Только для нового окружения без APP_KEY:
 docker compose exec app php artisan key:generate
 docker compose exec app php artisan migrate
+docker compose restart queue
 ```
 
 Не перезаписывайте существующий `.env` и не меняйте ключ рабочего приложения.
+`public/build` и `node_modules` не хранятся в Git. После клонирования обязательно
+выполните `npm ci` и `npm run build`, иначе Laravel выдаст
+`ViteManifestNotFoundException`. После обновления интерфейса повторяйте сборку.
+Контейнер frontend запускается только этими командами и автоматически удаляется
+после завершения; он создаёт файлы от UID/GID 1000. Если ваши UID/GID отличаются,
+задайте `LOCAL_UID` и `LOCAL_GID` перед запуском.
 Compose задаёт внутренние адреса db/redis/rabbitmq/mailpit. Остальные значения,
 включая credentials БД/RabbitMQ, читаются из `.env`; они должны совпадать с
 параметрами соответствующих контейнеров. Существующий PostgreSQL volume сохраняет
@@ -43,7 +51,12 @@ docker compose exec app php artisan fitspot:demo
 
 ## Разработка
 
+Для Vite на хосте установите Node.js 24 (версия записана в `.nvmrc`):
+
 ```sh
+nvm install
+nvm use
+npm ci
 npm run dev
 ```
 
