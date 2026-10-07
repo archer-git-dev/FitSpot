@@ -1,6 +1,14 @@
-version: '3.8'
-
 services:
+  frontend:
+    image: node:24-bookworm-slim
+    profiles: [tools]
+    working_dir: /var/www
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+    environment:
+      npm_config_cache: /tmp/npm-cache
+    volumes:
+      - .:/var/www
+
   app:
     build:
       context: .
@@ -11,12 +19,27 @@ services:
     environment:
       SERVICE_NAME: app
       SERVICE_TAGS: dev
+      APP_LOCALE: ru
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: 5432
+      REDIS_HOST: redis
+      CACHE_STORE: redis
+      QUEUE_CONNECTION: rabbitmq
+      RABBITMQ_HOST: rabbitmq
+      MAIL_MAILER: smtp
+      MAIL_HOST: mailpit
+      MAIL_PORT: 1025
     volumes:
       - .:/var/www
     networks:
       - fitspot_network
 
   web:
+    depends_on:
+      app:
+        condition: service_started
+        restart: true
     image: nginx:alpine
     container_name: fitspot_web
     restart: unless-stopped
@@ -75,6 +98,18 @@ services:
       dockerfile: docker/Dockerfile
     container_name: fitspot_queue
     restart: unless-stopped
+    environment:
+      APP_LOCALE: ru
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: 5432
+      REDIS_HOST: redis
+      CACHE_STORE: redis
+      QUEUE_CONNECTION: rabbitmq
+      RABBITMQ_HOST: rabbitmq
+      MAIL_MAILER: smtp
+      MAIL_HOST: mailpit
+      MAIL_PORT: 1025
     command: /usr/bin/supervisord -c /etc/supervisor/supervisord.conf
     volumes:
       - .:/var/www
@@ -83,6 +118,13 @@ services:
       - app
       - redis
       - rabbitmq
+    networks:
+      - fitspot_network
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports:
+      - "8025:8025"
     networks:
       - fitspot_network
 
