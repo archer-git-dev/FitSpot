@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { Head, Link, router, useForm, usePage } from "@inertiajs/vue3";
+import ScheduleEditor from "../Components/ScheduleEditor.vue";
 import TelegramButton from "../Components/TelegramButton.vue";
 import { useDirty } from "../composables/dirty";
 type Interval = { day: number; start: number; end: number };
@@ -18,6 +19,14 @@ type Service = {
 };
 const props = defineProps<{
     section: string;
+    calendar: {
+        date: string;
+        day: number;
+        override: boolean;
+        intervals: { start: number; end: number }[];
+    }[];
+    today: string;
+    hasAvailability: boolean;
     workspace: any;
     timezones: string[];
     publicUrl: string;
@@ -32,7 +41,7 @@ const page = usePage<any>(),
 const navigation = [
     ["overview", "Обзор"],
     ["profile", "Профиль"],
-    ["schedule", "Недельный график"],
+    ["schedule", "Расписание"],
     ["services", "Услуги"],
     ["rules", "Правила записи"],
     ["access", "Настройки доступа"],
@@ -51,13 +60,13 @@ const profile = useForm({
     photo: null as File | null,
     remove_photo: false,
 });
-const schedule = useForm({ intervals: [] as Interval[] });
+
 const rules = useForm({
     buffer_before: 0,
-    buffer_after: 10,
+    buffer_after: 5,
     lead_minutes: 120,
     horizon_days: 30,
-    slot_step: 15,
+    slot_step: 5,
     cancel_minutes: 720,
     reschedule_minutes: 720,
 });
@@ -66,7 +75,7 @@ const service = useForm({
     description: "",
     type: "personal",
     format: "in_person",
-    duration: 60,
+    duration: 55,
     price: "",
     capacity: 1,
     location: "",
@@ -87,8 +96,7 @@ const days = [
     "Суббота",
     "Воскресенье",
 ];
-const copyTargets = ref<number[]>([]),
-    copySource = ref(1);
+
 const changingStatus = ref<number | null>(null);
 function toggleStatus(item: Service) {
     if (changingStatus.value !== null) return;
@@ -118,12 +126,6 @@ function hydrate() {
     profile.photo = null;
     profile.remove_photo = false;
     profile.defaults();
-    schedule.intervals = w.intervals.map((i: Interval) => ({
-        day: i.day,
-        start: i.start,
-        end: i.end,
-    }));
-    schedule.defaults();
     for (const k of Object.keys(rules.data()) as string[])
         (rules as any)[k] = w.rules[k];
     rules.defaults();
@@ -133,7 +135,6 @@ watch(() => props.workspace, hydrate);
 useDirty(
     () =>
         profile.isDirty ||
-        schedule.isDirty ||
         rules.isDirty ||
         (showService.value && service.isDirty) ||
         access.isDirty,
@@ -143,38 +144,9 @@ const ready = computed(
         !!props.workspace.name &&
         !!props.workspace.slug &&
         !!props.workspace.timezone &&
-        props.workspace.intervals.length > 0 &&
+        props.hasAvailability &&
         props.workspace.services.some((s: Service) => s.active),
 );
-function add(day: number) {
-    const items = schedule.intervals.filter((i) => i.day === day);
-    if (items.length < 8)
-        schedule.intervals.push({
-            day,
-            start: items.length
-                ? Math.min(items[items.length - 1].end + 60, 1380)
-                : 540,
-            end: items.length
-                ? Math.min(items[items.length - 1].end + 120, 1440)
-                : 1080,
-        });
-}
-function displayTime(minutes: number) {
-    return `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
-}
-function inputTime(item: Interval, key: "start" | "end", e: Event) {
-    const value = (e.target as HTMLInputElement).value;
-    const parts = value.split(":").map(Number);
-    if (parts.length === 2) item[key] = parts[0] * 60 + parts[1];
-}
-function copy() {
-    const items = schedule.intervals.filter((i) => i.day === copySource.value);
-    for (const day of copyTargets.value) {
-        schedule.intervals = schedule.intervals.filter((i) => i.day !== day);
-        schedule.intervals.push(...items.map((i) => ({ ...i, day })));
-    }
-    copyTargets.value = [];
-}
 function edit(item?: Service) {
     if (
         showService.value &&
@@ -188,7 +160,7 @@ function edit(item?: Service) {
         description: item?.description || "",
         type: item?.type || "personal",
         format: item?.format || "in_person",
-        duration: item?.duration || 60,
+        duration: item?.duration || 55,
         price: item
             ? `${Math.floor(item.price_kopecks / 100)}.${String(item.price_kopecks % 100).padStart(2, "0")}`
             : "",
@@ -305,7 +277,7 @@ function photoInput(e: Event) {
                 <section v-if="section === 'overview'">
                     <div class="card bg-[#103e2e]! text-white! mb-6">
                         <p class="text-[#a5d2bd] text-sm mb-3">
-                            ВАША ПРАКТИКА НАЧИНАЕТСЯ ЗДЕСЬ
+                            ВАША РАБОТА НАЧИНАЕТСЯ ЗДЕСЬ
                         </p>
                         <h2 class="text-2xl!">
                             {{
@@ -335,14 +307,17 @@ function photoInput(e: Event) {
                             </p></Link
                         ><Link href="/app/schedule" class="card"
                             ><p class="muted mb-3">02 · ГРАФИК</p>
-                            <h2>Рабочая неделя</h2>
+                            <h2>Ваше расписание</h2>
                             <p class="text-green-800">
                                 {{
-                                    workspace.intervals.length
-                                        ? "Интервалов: " +
-                                          workspace.intervals.length
+                                    hasAvailability
+                                        ? "Рабочие даты настроены"
                                         : "Добавить часы →"
                                 }}
+                            </p>
+                            <p class="muted text-xs mt-2">
+                                Проверяем ближайшие
+                                {{ rules.horizon_days }} дней.
                             </p></Link
                         ><Link href="/app/services" class="card"
                             ><p class="muted mb-3">03 · УСЛУГИ</p>
@@ -378,6 +353,10 @@ function photoInput(e: Event) {
                     class="card max-w-3xl"
                 >
                     <h2>Профиль тренера</h2>
+                    <p class="muted mb-4">
+                        Место проведения и адрес необязательны. Укажите основной
+                        зал, если проводите очные тренировки.
+                    </p>
                     <div class="flex items-center gap-5 mb-6">
                         <img
                             v-if="workspace.photo_url && !profile.remove_photo"
@@ -489,164 +468,13 @@ function photoInput(e: Event) {
                         Сохранить профиль
                     </button>
                 </form>
-                <section v-if="section === 'schedule'">
-                    <p class="muted mb-5">
-                        Время указано в часовом поясе {{ workspace.timezone }}.
-                        Перерывы — промежутки между интервалами.
-                    </p>
-                    <form @submit.prevent="schedule.put('/app/schedule')">
-                        <div
-                            class="card mb-4"
-                            v-for="(day, index) in days"
-                            :key="day"
-                        >
-                            <div
-                                class="flex justify-between gap-3 items-center mb-3"
-                            >
-                                <h2 class="mb-0!">{{ day }}</h2>
-                                <button
-                                    type="button"
-                                    class="text-sm font-semibold text-green-800"
-                                    :disabled="
-                                        schedule.intervals.filter(
-                                            (i) => i.day === index + 1,
-                                        ).length >= 8
-                                    "
-                                    @click="add(index + 1)"
-                                >
-                                    + Интервал
-                                </button>
-                            </div>
-                            <p
-                                v-if="
-                                    !schedule.intervals.some(
-                                        (i) => i.day === index + 1,
-                                    )
-                                "
-                                class="muted"
-                            >
-                                Выходной
-                            </p>
-                            <div
-                                v-for="item in schedule.intervals.filter(
-                                    (i) => i.day === index + 1,
-                                )"
-                                :key="schedule.intervals.indexOf(item)"
-                                class="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 items-end mb-3"
-                            >
-                                <div>
-                                    <label
-                                        :for="
-                                            'start-' +
-                                            schedule.intervals.indexOf(item)
-                                        "
-                                        >Начало</label
-                                    ><input
-                                        :id="
-                                            'start-' +
-                                            schedule.intervals.indexOf(item)
-                                        "
-                                        type="time"
-                                        :value="displayTime(item.start)"
-                                        @input="
-                                            inputTime(item, 'start', $event)
-                                        "
-                                        required
-                                    />
-                                </div>
-                                <div>
-                                    <label
-                                        :for="
-                                            'end-' +
-                                            schedule.intervals.indexOf(item)
-                                        "
-                                        >Окончание</label
-                                    ><input
-                                        :id="
-                                            'end-' +
-                                            schedule.intervals.indexOf(item)
-                                        "
-                                        :type="
-                                            item.end === 1440 ? 'text' : 'time'
-                                        "
-                                        :value="displayTime(item.end)"
-                                        @input="inputTime(item, 'end', $event)"
-                                        required
-                                    /><button
-                                        type="button"
-                                        class="text-xs text-green-800 mt-1"
-                                        @click="
-                                            item.end =
-                                                item.end === 1440 ? 1380 : 1440
-                                        "
-                                    >
-                                        {{
-                                            item.end === 1440
-                                                ? "До 23:00"
-                                                : "До 24:00"
-                                        }}
-                                    </button>
-                                </div>
-                                <button
-                                    type="button"
-                                    class="btn secondary mb-6"
-                                    aria-label="Удалить интервал"
-                                    @click="
-                                        schedule.intervals.splice(
-                                            schedule.intervals.indexOf(item),
-                                            1,
-                                        )
-                                    "
-                                >
-                                    ×
-                                </button>
-                            </div>
-                        </div>
-                        <div class="card mb-5">
-                            <h2>Скопировать график дня</h2>
-                            <label for="copy-source">Из дня</label
-                            ><select id="copy-source" v-model="copySource">
-                                <option
-                                    v-for="(day, index) in days"
-                                    :value="index + 1"
-                                >
-                                    {{ day }}
-                                </option>
-                            </select>
-                            <div class="flex flex-wrap gap-3 my-4">
-                                <label
-                                    v-for="(day, index) in days"
-                                    class="font-normal"
-                                    ><input
-                                        v-model="copyTargets"
-                                        type="checkbox"
-                                        :value="index + 1"
-                                        :disabled="copySource === index + 1"
-                                    />
-                                    {{ day }}</label
-                                >
-                            </div>
-                            <button
-                                type="button"
-                                class="btn secondary"
-                                @click="copy"
-                                :disabled="!copyTargets.length"
-                            >
-                                Скопировать
-                            </button>
-                        </div>
-                        <div
-                            v-if="Object.keys(schedule.errors).length"
-                            role="alert"
-                            class="error mb-4"
-                        >
-                            <p v-for="error in schedule.errors">{{ error }}</p>
-                        </div>
-                        <button class="btn" :disabled="schedule.processing">
-                            Сохранить график
-                        </button>
-                    </form>
-                </section>
+                <ScheduleEditor
+                    v-if="section === 'schedule'"
+                    :week="workspace.intervals"
+                    :calendar="calendar"
+                    :today="today"
+                    :timezone="workspace.timezone"
+                />
                 <form
                     v-if="section === 'rules'"
                     @submit.prevent="rules.put('/app/rules')"
@@ -657,14 +485,8 @@ function photoInput(e: Event) {
                         <div
                             v-for="[key, label, min, max] in [
                                 [
-                                    'buffer_before',
-                                    'Буфер до занятия, минут',
-                                    0,
-                                    120,
-                                ],
-                                [
                                     'buffer_after',
-                                    'Буфер после занятия, минут',
+                                    'Перерыв между тренировками, минут',
                                     0,
                                     120,
                                 ],
@@ -693,21 +515,6 @@ function photoInput(e: Event) {
                                 required
                             />
                             <p class="error">{{ rules.errors[key] }}</p>
-                        </div>
-                        <div class="field">
-                            <label for="slot_step">Шаг начала, минут</label
-                            ><select
-                                id="slot_step"
-                                v-model.number="rules.slot_step"
-                            >
-                                <option
-                                    v-for="step in [5, 10, 15, 20, 30, 60]"
-                                    :value="step"
-                                >
-                                    {{ step }}
-                                </option>
-                            </select>
-                            <p class="error">{{ rules.errors.slot_step }}</p>
                         </div>
                         <div class="field">
                             <label for="cancel">Отмена минимум за, часов</label
@@ -756,9 +563,64 @@ function photoInput(e: Event) {
                         </div>
                     </div>
                     <p class="muted mb-6">
-                        Буферы занимают ваше рабочее время. Эти правила начнут
-                        применяться при подключении самозаписи.
+                        Перерыв резервирует ваше рабочее время. Эти правила
+                        начнут применяться при подключении самозаписи.
                     </p>
+                    <p class="muted mb-5">
+                        55 минут тренировки + 5 минут перерыва занимают час
+                        вашего расписания. Длительность самой тренировки
+                        задаётся в услуге.
+                    </p>
+                    <details
+                        class="mb-5"
+                        :open="
+                            !!rules.errors.buffer_before ||
+                            !!rules.errors.slot_step
+                        "
+                    >
+                        <summary class="cursor-pointer font-semibold">
+                            Дополнительные настройки
+                        </summary>
+                        <div class="grid sm:grid-cols-2 gap-4 mt-4">
+                            <div>
+                                <label for="buffer_before"
+                                    >Подготовка до тренировки, минут</label
+                                ><input
+                                    id="buffer_before"
+                                    v-model.number="rules.buffer_before"
+                                    type="number"
+                                    min="0"
+                                    max="120"
+                                    required
+                                />
+                                <p class="error">
+                                    {{ rules.errors.buffer_before }}
+                                </p>
+                            </div>
+                            <div>
+                                <label for="slot_step"
+                                    >Сетка начала тренировок, минут</label
+                                ><select
+                                    id="slot_step"
+                                    v-model.number="rules.slot_step"
+                                >
+                                    <option
+                                        v-for="step in [5, 10, 15, 20, 30, 60]"
+                                        :value="step"
+                                    >
+                                        {{ step }}
+                                    </option>
+                                </select>
+                                <p class="error">
+                                    {{ rules.errors.slot_step }}
+                                </p>
+                            </div>
+                        </div>
+                        <p class="muted mt-2">
+                            Сетка определяет допустимое время начала будущей
+                            записи. Прежние значения сохранены.
+                        </p>
+                    </details>
                     <button class="btn" :disabled="rules.processing">
                         Сохранить правила
                     </button>
@@ -826,8 +688,9 @@ function photoInput(e: Event) {
                                 v-if="warnings.includes(item.id)"
                                 class="text-amber-800 text-sm mb-4"
                             >
-                                Услуга с буферами пока не помещается в рабочий
-                                график.
+                                Услуга с перерывом пока не помещается в
+                                расписание на ближайшие
+                                {{ rules.horizon_days }} дней.
                             </p>
                             <div class="flex flex-wrap gap-3">
                                 <button

@@ -30,3 +30,5 @@ Thumbs.db
 /playwright-report/
 
 /storage/inertia-devtools/
+
+/tmp/

@@ -15,6 +15,11 @@ class Workspace extends Model
         return $this->hasMany(WorkingInterval::class)->orderBy('day')->orderBy('start');
     }
 
+    public function calendarDays()
+    {
+        return $this->hasMany(CalendarDay::class)->orderBy('date');
+    }
+
     public function rules()
     {
         return $this->hasOne(BookingRules::class);

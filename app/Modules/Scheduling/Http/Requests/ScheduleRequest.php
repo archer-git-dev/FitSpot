@@ -2,6 +2,7 @@
 
 namespace App\Modules\Scheduling\Http\Requests;
 
+use App\Modules\Scheduling\Services\IntervalValidator;
 use Illuminate\Foundation\Http\FormRequest;
 
 class ScheduleRequest extends FormRequest
@@ -22,25 +23,16 @@ class ScheduleRequest extends FormRequest
             if ($v->errors()->isNotEmpty()) {
                 return;
             }
-            $days = [];
+            $groups = [];
             foreach ($this->input('intervals', []) as $i => $item) {
-                if ($item['start'] >= $item['end']) {
-                    $v->errors()->add("intervals.$i.end", 'Окончание должно быть позже начала.');
-                }
-                $days[$item['day']][] = $item;
+                $groups[$item['day']][$i] = $item;
             }
-            foreach ($days as $items) {
-                if (count($items) > 8) {
-                    $v->errors()->add('intervals', 'Максимум 8 интервалов в день.');
-                }
-                usort($items, fn ($a, $b) => $a['start'] <=> $b['start']);
-                $end = -1;
-                foreach ($items as $item) {
-                    if ($item['start'] < $end) {
-                        $v->errors()->add('intervals', 'Рабочие интервалы не должны пересекаться.');
-                    }
-                    $end = max($end, $item['end']);
-                }
+            $labels = [1 => 'Понедельник', 2 => 'Вторник', 3 => 'Среда', 4 => 'Четверг', 5 => 'Пятница', 6 => 'Суббота', 7 => 'Воскресенье'];
+            foreach ($groups as $day => $items) {
+                app(IntervalValidator::class)->validate($v, $items, 'intervals', $labels[$day]);
+            }
+            if ($v->errors()->isNotEmpty()) {
+                $v->errors()->add('intervals', 'График не сохранён — исправьте отмеченные интервалы.');
             }
         }];
     }

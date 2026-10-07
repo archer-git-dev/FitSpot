@@ -13,8 +13,9 @@ class CreateNewUser implements CreatesNewUsers
 {
     public function create(array $input): User
     {
+        $input['name'] = trim($input['name'] ?? '');
         $input['email'] = mb_strtolower(trim($input['email'] ?? ''));
-        Validator::make($input, ['name' => 'required|string|max:100', 'email' => 'required|email|max:255|unique:users', 'password' => ['required', 'confirmed', Password::min(12)]])->validate();
+        Validator::make($input, ['name' => 'required|string|min:2|max:100', 'email' => 'required|email|max:255|unique:users', 'password' => ['required', 'confirmed', Password::min(12)]])->validate();
 
         return DB::transaction(function () use ($input) {
             $user = User::create(['name' => $input['name'], 'email' => $input['email'], 'password' => $input['password']]);

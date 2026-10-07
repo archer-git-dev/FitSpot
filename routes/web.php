@@ -20,6 +20,9 @@ Route::middleware(['auth', 'verified'])->prefix('app')->group(function () {
     Route::get('/', [PanelController::class, 'show'])->name('dashboard');
     Route::get('/photo', [PanelController::class, 'photo'])->name('workspace.photo');
     Route::post('/profile', [PanelController::class, 'profile']);
+    Route::get('/schedule/calendar', [PanelController::class, 'calendarRange']);
+    Route::put('/schedule/dates', [PanelController::class, 'calendar']);
+    Route::delete('/schedule/dates/{date}', [PanelController::class, 'resetDate']);
     Route::put('/schedule', [PanelController::class, 'schedule']);
     Route::put('/rules', [PanelController::class, 'rules']);
     Route::post('/services', [PanelController::class, 'saveService']);
